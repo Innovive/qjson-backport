@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +36,8 @@
 #include "qjsonvalue.h"
 #include "qjsonarray.h"
 #include <qstringlist.h>
-#include <qdebug.h>
 #include <qvariant.h>
+#include <qdebug.h>
 #include "qjsonwriter_p.h"
 #include "qjsonparser_p.h"
 #include "qjson_p.h"
@@ -53,7 +45,9 @@
 QT_BEGIN_NAMESPACE
 
 /*! \class QJsonDocument
+    \inmodule QtCore
     \ingroup json
+    \ingroup shared
     \reentrant
     \since 5.0
 
@@ -75,6 +69,8 @@ QT_BEGIN_NAMESPACE
 
     A document can also be created from a stored binary representation using fromBinaryData() or
     fromRawData().
+
+    \sa {JSON Support in Qt}, {JSON Save Game Example}
 */
 
 /*!
@@ -103,7 +99,8 @@ QJsonDocument::QJsonDocument(const QJsonArray &array)
     setArray(array);
 }
 
-/*! \internal
+/*!
+    \internal
  */
 QJsonDocument::QJsonDocument(QJsonPrivate::Data *data)
     : d(data)
@@ -176,7 +173,7 @@ QJsonDocument &QJsonDocument::operator =(const QJsonDocument &other)
 
  Returns a QJsonDocument representing the data.
 
- \sa rawData fromBinaryData isNull DataValidation
+ \sa rawData(), fromBinaryData(), isNull(), DataValidation
  */
 QJsonDocument QJsonDocument::fromRawData(const char *data, int size, DataValidation validation)
 {
@@ -198,7 +195,7 @@ QJsonDocument QJsonDocument::fromRawData(const char *data, int size, DataValidat
 
 /*!
   Returns the raw binary representation of the data
-  \a size will contain the size of the \a data.
+  \a size will contain the size of the returned data.
 
   This method is useful to e.g. stream the JSON document
   in it's binary form to a file.
@@ -220,27 +217,30 @@ const char *QJsonDocument::rawData(int *size) const
  By default the data is validated. If the \a data is not valid, the method returns
  a null document.
 
- \sa toBinaryData fromRawData isNull DataValidation
+ \sa toBinaryData(), fromRawData(), isNull(), DataValidation
  */
 QJsonDocument QJsonDocument::fromBinaryData(const QByteArray &data, DataValidation validation)
 {
+    if (data.size() < (int)(sizeof(QJsonPrivate::Header) + sizeof(QJsonPrivate::Base)))
+        return QJsonDocument();
+
     QJsonPrivate::Header h;
     memcpy(&h, data.constData(), sizeof(QJsonPrivate::Header));
     QJsonPrivate::Base root;
     memcpy(&root, data.constData() + sizeof(QJsonPrivate::Header), sizeof(QJsonPrivate::Base));
 
     // do basic checks here, so we don't try to allocate more memory than we can.
-    if (data.size() < (int)(sizeof(QJsonPrivate::Header) + sizeof(QJsonPrivate::Base)) ||
-        h.tag != QJsonDocument::BinaryFormatTag || h.version != 1u ||
+    if (h.tag != QJsonDocument::BinaryFormatTag || h.version != 1u ||
         sizeof(QJsonPrivate::Header) + root.size > (uint)data.size())
         return QJsonDocument();
 
-    char *raw = (char *)malloc(data.size());
+    const uint size = sizeof(QJsonPrivate::Header) + root.size;
+    char *raw = (char *)malloc(size);
     if (!raw)
         return QJsonDocument();
 
-    memcpy(raw, data.constData(), data.size());
-    QJsonPrivate::Data *d = new QJsonPrivate::Data(raw, data.size());
+    memcpy(raw, data.constData(), size);
+    QJsonPrivate::Data *d = new QJsonPrivate::Data(raw, size);
 
     if (validation != BypassValidation && !d->valid()) {
         delete d;
@@ -253,11 +253,11 @@ QJsonDocument QJsonDocument::fromBinaryData(const QByteArray &data, DataValidati
 /*!
  Creates a QJsonDocument from the QVariant \a variant.
 
- If the \a variant contains any other type than a QVariant::Map,
- QVariant::List or QVariant::StringList, the returned document
+ If the \a variant contains any other type than a QVariantMap,
+ QVariantList or QStringList, the returned document
  document is invalid.
 
- \sa toVariant
+ \sa toVariant()
  */
 QJsonDocument QJsonDocument::fromVariant(const QVariant &variant)
 {
@@ -278,7 +278,7 @@ QJsonDocument QJsonDocument::fromVariant(const QVariant &variant)
  The returned variant will be a QVariantList if the document is
  a QJsonArray and a QVariantMap if the document is a QJsonObject.
 
- \sa fromVariant, QJsonValue::toVariant()
+ \sa fromVariant(), QJsonValue::toVariant()
  */
 QVariant QJsonDocument::toVariant() const
 {
@@ -294,9 +294,47 @@ QVariant QJsonDocument::toVariant() const
 /*!
  Converts the QJsonDocument to a UTF-8 encoded JSON document.
 
- \sa fromJson
+ \sa fromJson()
  */
+#ifndef QT_JSON_READONLY
 QByteArray QJsonDocument::toJson() const
+{
+    return toJson(Indented);
+}
+#endif
+
+/*!
+    \enum QJsonDocument::JsonFormat
+
+    This value defines the format of the JSON byte array produced
+    when converting to a QJsonDocument using toJson().
+
+    \value Indented Defines human readable output as follows:
+        \code
+        {
+            "Array": [
+                true,
+                999,
+                "string"
+            ],
+            "Key": "Value",
+            "null": null
+        }
+        \endcode
+
+    \value Compact Defines a compact output as follows:
+        \code
+        {"Array":[true,999,"string"],"Key":"Value","null":null}
+        \endcode
+  */
+
+/*!
+    Converts the QJsonDocument to a UTF-8 encoded JSON document in the provided \a format.
+
+    \sa fromJson(), JsonFormat
+ */
+#ifndef QT_JSON_READONLY
+QByteArray QJsonDocument::toJson(JsonFormat format) const
 {
     if (!d)
         return QByteArray();
@@ -304,19 +342,25 @@ QByteArray QJsonDocument::toJson() const
     QByteArray json;
 
     if (d->header->root()->isArray())
-        QJsonPrivate::Writer::arrayToJson(static_cast<QJsonPrivate::Array *>(d->header->root()), json, 0);
+        QJsonPrivate::Writer::arrayToJson(static_cast<QJsonPrivate::Array *>(d->header->root()), json, 0, (format == Compact));
     else
-        QJsonPrivate::Writer::objectToJson(static_cast<QJsonPrivate::Object *>(d->header->root()), json, 0);
+        QJsonPrivate::Writer::objectToJson(static_cast<QJsonPrivate::Object *>(d->header->root()), json, 0, (format == Compact));
 
     return json;
 }
+#endif
 
 /*!
  Parses a UTF-8 encoded JSON document and creates a QJsonDocument
- from it. isNull() will return \c false if no error was encountered during
+ from it.
+
+ \a json contains the json document to be parsed.
+
+ The optional \a error variable can be used to pass in a QJsonParseError data
+ structure that will contain information about possible errors encountered during
  parsing.
 
- \sa toJson
+ \sa toJson(), QJsonParseError
  */
 QJsonDocument QJsonDocument::fromJson(const QByteArray &json, QJsonParseError *error)
 {
@@ -325,7 +369,7 @@ QJsonDocument QJsonDocument::fromJson(const QByteArray &json, QJsonParseError *e
 }
 
 /*!
-    Returns true if the document doesn't contain any data.
+    Returns \c true if the document doesn't contain any data.
  */
 bool QJsonDocument::isEmpty() const
 {
@@ -345,7 +389,7 @@ bool QJsonDocument::isEmpty() const
  or computers. fromBinaryData() can be used to convert it back into a
  JSON document.
 
- \sa fromBinaryData
+ \sa fromBinaryData()
  */
 QByteArray QJsonDocument::toBinaryData() const
 {
@@ -356,9 +400,9 @@ QByteArray QJsonDocument::toBinaryData() const
 }
 
 /*!
-    Returns true if the document contains an array.
+    Returns \c true if the document contains an array.
 
-    \sa array() isObject()
+    \sa array(), isObject()
  */
 bool QJsonDocument::isArray() const
 {
@@ -370,9 +414,9 @@ bool QJsonDocument::isArray() const
 }
 
 /*!
-    Returns true if the document contains an object.
+    Returns \c true if the document contains an object.
 
-    \sa object() isArray()
+    \sa object(), isArray()
  */
 bool QJsonDocument::isObject() const
 {
@@ -389,7 +433,7 @@ bool QJsonDocument::isObject() const
     Returns an empty object if the document contains an
     array.
 
-    \sa isObject array setObject
+    \sa isObject(), array(), setObject()
  */
 QJsonObject QJsonDocument::object() const
 {
@@ -407,7 +451,7 @@ QJsonObject QJsonDocument::object() const
     Returns an empty array if the document contains an
     object.
 
-    \sa isArray object setArray
+    \sa isArray(), object(), setArray()
  */
 QJsonArray QJsonDocument::array() const
 {
@@ -422,7 +466,7 @@ QJsonArray QJsonDocument::array() const
 /*!
     Sets \a object as the main object of this document.
 
-    \sa setArray object
+    \sa setArray(), object()
  */
 void QJsonDocument::setObject(const QJsonObject &object)
 {
@@ -449,7 +493,7 @@ void QJsonDocument::setObject(const QJsonObject &object)
 /*!
     Sets \a array as the main object of this document.
 
-    \sa setObject array
+    \sa setObject(), array()
  */
 void QJsonDocument::setArray(const QJsonArray &array)
 {
@@ -502,7 +546,7 @@ bool QJsonDocument::operator==(const QJsonDocument &other) const
  */
 
 /*!
-    returns true if this document is null.
+    returns \c true if this document is null.
 
     Null documents are documents created through the default constructor.
 
@@ -515,7 +559,7 @@ bool QJsonDocument::isNull() const
     return (d == 0);
 }
 
-#ifndef QT_NO_DEBUG_STREAM
+#if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
 QDebug operator<<(QDebug dbg, const QJsonDocument &o)
 {
     if (!o.d) {
@@ -530,7 +574,7 @@ QDebug operator<<(QDebug dbg, const QJsonDocument &o)
     dbg.nospace() << "QJsonDocument("
                   << json.constData() // print as utf-8 string without extra quotation marks
                   << ")";
-    return dbg.space();
+    return dbg;
 }
 #endif
 

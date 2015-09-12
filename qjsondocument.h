@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,8 +36,6 @@
 
 #include "qjsonvalue.h"
 
-QT_BEGIN_HEADER
-
 QT_BEGIN_NAMESPACE
 
 class QDebug;
@@ -54,7 +44,7 @@ namespace QJsonPrivate {
     class Parser;
 }
 
-struct Q_JSONRPC_EXPORT QJsonParseError
+struct Q_CORE_EXPORT QJsonParseError
 {
     enum ParseError {
         NoError = 0,
@@ -63,19 +53,24 @@ struct Q_JSONRPC_EXPORT QJsonParseError
         UnterminatedArray,
         MissingValueSeparator,
         IllegalValue,
-        EndOfNumber,
+        TerminationByNumber,
         IllegalNumber,
-        StringEscapeSequence,
-        StringUTF8Scan,
-        EndOfString,
-        MissingObject
+        IllegalEscapeSequence,
+        IllegalUTF8String,
+        UnterminatedString,
+        MissingObject,
+        DeepNesting,
+        DocumentTooLarge,
+        GarbageAtEnd
     };
+
+    QString    errorString() const;
 
     int        offset;
     ParseError error;
 };
 
-class Q_JSONRPC_EXPORT QJsonDocument
+class Q_CORE_EXPORT QJsonDocument
 {
 public:
 #ifdef Q_LITTLE_ENDIAN
@@ -106,8 +101,19 @@ public:
     static QJsonDocument fromVariant(const QVariant &variant);
     QVariant toVariant() const;
 
+    enum JsonFormat {
+        Indented,
+        Compact
+    };
+
     static QJsonDocument fromJson(const QByteArray &json, QJsonParseError *error = 0);
-    QByteArray toJson() const;
+
+#ifdef Q_QDOC
+    QByteArray toJson(JsonFormat format = Indented) const;
+#elif !defined(QT_JSON_READONLY)
+    QByteArray toJson() const; //### Merge in Qt6
+    QByteArray toJson(JsonFormat format) const;
+#endif
 
     bool isEmpty() const;
     bool isArray() const;
@@ -128,19 +134,17 @@ private:
     friend class QJsonValue;
     friend class QJsonPrivate::Data;
     friend class QJsonPrivate::Parser;
-    friend Q_JSONRPC_EXPORT QDebug operator<<(QDebug, const QJsonDocument &);
+    friend Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonDocument &);
 
     QJsonDocument(QJsonPrivate::Data *data);
 
     QJsonPrivate::Data *d;
 };
 
-#ifndef QT_NO_DEBUG_STREAM
-Q_JSONRPC_EXPORT QDebug operator<<(QDebug, const QJsonDocument &);
+#if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
+Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonDocument &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QJSONDOCUMENT_H

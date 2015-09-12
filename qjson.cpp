@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -47,7 +39,7 @@ QT_BEGIN_NAMESPACE
 namespace QJsonPrivate
 {
 
-#ifdef Q_LITTLE_ENDIAN
+#if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
 #define Q_TO_LITTLE_ENDIAN(x) (x)
 #else
 #define Q_TO_LITTLE_ENDIAN(x) ( ((x & 0xff) << 24) | ((x & 0xff00) << 8) | ((x & 0xff0000) >> 8) | ((x & 0xff000000) >> 24) )
@@ -149,6 +141,10 @@ bool Data::valid() const
 int Base::reserveSpace(uint dataSize, int posInTable, uint numItems, bool replace)
 {
     Q_ASSERT(posInTable >= 0 && posInTable <= (int)length);
+    if (size + dataSize >= Value::MaxSize) {
+        qWarning("QJson: Document too large to store in data structure %d %d %d", (uint)size, dataSize, Value::MaxSize);
+        return 0;
+    }
 
     offset off = tableOffset;
     // move table to new position
@@ -204,6 +200,7 @@ bool Object::isValid() const
     if (tableOffset + length*sizeof(offset) > size)
         return false;
 
+    QString lastKey;
     for (uint i = 0; i < length; ++i) {
         offset entryOffset = table()[i];
         if (entryOffset + sizeof(Entry) >= tableOffset)
@@ -212,8 +209,12 @@ bool Object::isValid() const
         int s = e->size();
         if (table()[i] + s > tableOffset)
             return false;
+        QString key = e->key();
+        if (key < lastKey)
+            return false;
         if (!e->value.isValid(this))
             return false;
+        lastKey = key;
     }
     return true;
 }
@@ -239,14 +240,6 @@ bool Entry::operator ==(const QString &key) const
         return (shallowLatin1Key() == key);
     else
         return (shallowKey() == key);
-}
-
-bool Entry::operator >=(const QString &key) const
-{
-    if (value.latinKey)
-        return (shallowLatin1Key() >= key);
-    else
-        return (shallowKey() >= key);
 }
 
 bool Entry::operator ==(const Entry &other) const
@@ -286,9 +279,9 @@ int Value::usedStorage(const Base *b) const
     case QJsonValue::String: {
         char *d = data(b);
         if (latinOrIntValue)
-            s = sizeof(ushort) + *(ushort *)d;
+            s = sizeof(ushort) + qFromLittleEndian(*(ushort *)d);
         else
-            s = sizeof(int) + sizeof(ushort)*(*(int *)d);
+            s = sizeof(int) + sizeof(ushort) * qFromLittleEndian(*(int *)d);
         break;
     }
     case QJsonValue::Array:
@@ -342,7 +335,7 @@ bool Value::isValid(const Base *b) const
 /*!
     \internal
  */
-int Value::requiredStorage(const QJsonValue &v, bool *compressed)
+int Value::requiredStorage(QJsonValue &v, bool *compressed)
 {
     *compressed = false;
     switch (v.t) {
@@ -359,6 +352,11 @@ int Value::requiredStorage(const QJsonValue &v, bool *compressed)
     }
     case QJsonValue::Array:
     case QJsonValue::Object:
+        if (v.d && v.d->compactionCounter) {
+            v.detach();
+            v.d->compact();
+            v.base = static_cast<QJsonPrivate::Base *>(v.d->header->root());
+        }
         return v.base ? v.base->size : sizeof(QJsonPrivate::Base);
     case QJsonValue::Undefined:
     case QJsonValue::Null:

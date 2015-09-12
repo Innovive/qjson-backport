@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -44,19 +36,33 @@
 
 #include "qjsonvalue.h"
 #include <QtCore/qiterator.h>
-
-QT_BEGIN_HEADER
+#ifdef Q_COMPILER_INITIALIZER_LISTS
+#include <QtCore/qpair.h>
+#include <initializer_list>
+#endif
 
 QT_BEGIN_NAMESPACE
 
 class QDebug;
 template <class Key, class T> class QMap;
 typedef QMap<QString, QVariant> QVariantMap;
+template <class Key, class T> class QHash;
+typedef QHash<QString, QVariant> QVariantHash;
 
-class Q_JSONRPC_EXPORT QJsonObject
+class Q_CORE_EXPORT QJsonObject
 {
 public:
     QJsonObject();
+
+#if defined(Q_COMPILER_INITIALIZER_LISTS) || defined(Q_QDOC)
+    QJsonObject(std::initializer_list<QPair<QString, QJsonValue> > args)
+    {
+        initialize();
+        for (std::initializer_list<QPair<QString, QJsonValue> >::const_iterator i = args.begin(); i != args.end(); ++i)
+            insert(i->first, i->second);
+    }
+#endif
+
     ~QJsonObject();
 
     QJsonObject(const QJsonObject &other);
@@ -64,6 +70,8 @@ public:
 
     static QJsonObject fromVariantMap(const QVariantMap &map);
     QVariantMap toVariantMap() const;
+    static QJsonObject fromVariantHash(const QVariantHash &map);
+    QVariantHash toVariantHash() const;
 
     QStringList keys() const;
     int size() const;
@@ -95,16 +103,19 @@ public:
         typedef std::bidirectional_iterator_tag iterator_category;
         typedef int difference_type;
         typedef QJsonValue value_type;
-//        typedef T *pointer;
         typedef QJsonValueRef reference;
 
-        inline iterator() : o(0), i(0) {}
-        inline iterator(QJsonObject *obj, int index) : o(obj), i(index) {}
+        Q_DECL_CONSTEXPR inline iterator() : o(0), i(0) {}
+        Q_DECL_CONSTEXPR inline iterator(QJsonObject *obj, int index) : o(obj), i(index) {}
 
         inline QString key() const { return o->keyAt(i); }
         inline QJsonValueRef value() const { return QJsonValueRef(o, i); }
         inline QJsonValueRef operator*() const { return QJsonValueRef(o, i); }
-        //inline T *operator->() const { return &concrete(i)->value; }
+#ifdef Q_QDOC
+        inline QJsonValueRef* operator->() const;
+#else
+        inline QJsonValueRefPtr operator->() const { return QJsonValueRefPtr(o, i); }
+#endif
         inline bool operator==(const iterator &other) const { return i == other.i; }
         inline bool operator!=(const iterator &other) const { return i != other.i; }
 
@@ -136,8 +147,8 @@ public:
         typedef QJsonValue value_type;
         typedef QJsonValue reference;
 
-        inline const_iterator() : o(0), i(0) {}
-        inline const_iterator(const QJsonObject *obj, int index)
+        Q_DECL_CONSTEXPR inline const_iterator() : o(0), i(0) {}
+        Q_DECL_CONSTEXPR inline const_iterator(const QJsonObject *obj, int index)
             : o(obj), i(index) {}
         inline const_iterator(const iterator &other)
             : o(other.o), i(other.i) {}
@@ -145,7 +156,11 @@ public:
         inline QString key() const { return o->keyAt(i); }
         inline QJsonValue value() const { return o->valueAt(i); }
         inline QJsonValue operator*() const { return o->valueAt(i); }
-        //inline const T *operator->() const { return &concrete(i)->value; }
+#ifdef Q_QDOC
+        inline QJsonValue* operator->() const;
+#else
+        inline QJsonValuePtr operator->() const { return QJsonValuePtr(o->valueAt(i)); }
+#endif
         inline bool operator==(const const_iterator &other) const { return i == other.i; }
         inline bool operator!=(const const_iterator &other) const { return i != other.i; }
 
@@ -194,9 +209,10 @@ private:
     friend class QJsonDocument;
     friend class QJsonValueRef;
 
-    friend Q_JSONRPC_EXPORT QDebug operator<<(QDebug, const QJsonObject &);
+    friend Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonObject &);
 
     QJsonObject(QJsonPrivate::Data *data, QJsonPrivate::Object *object);
+    void initialize();
     void detach(uint reserve = 0);
     void compact();
 
@@ -208,12 +224,10 @@ private:
     QJsonPrivate::Object *o;
 };
 
-#ifndef QT_NO_DEBUG_STREAM
-Q_JSONRPC_EXPORT QDebug operator<<(QDebug, const QJsonObject &);
+#if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
+Q_CORE_EXPORT QDebug operator<<(QDebug, const QJsonObject &);
 #endif
 
 QT_END_NAMESPACE
-
-QT_END_HEADER
 
 #endif // QJSONOBJECT_H

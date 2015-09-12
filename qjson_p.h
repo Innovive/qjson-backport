@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -53,18 +45,17 @@
 // We mean it.
 //
 
-#include "qjsonexport.h"
 #include "qjsonobject.h"
 #include "qjsonvalue.h"
 #include "qjsondocument.h"
 #include "qjsonarray.h"
-
-#include <qdebug.h>
 #include <qatomic.h>
 #include <qstring.h>
 #include <qendian.h>
+#include <qnumeric.h>
 
 #include <limits.h>
+#include <limits>
 
 QT_BEGIN_NAMESPACE
 
@@ -312,6 +303,7 @@ public:
     {
         d->length = str.length();
 #if Q_BYTE_ORDER == Q_BIG_ENDIAN
+        const qle_ushort *uc = (const qle_ushort *)str.unicode();
         for (int i = 0; i < str.length(); ++i)
             d->utf16[i] = uc[i];
 #else
@@ -352,7 +344,7 @@ public:
         return !memcmp(d->utf16, str.d->utf16, d->length*sizeof(ushort));
     }
     inline bool operator<(const String &other) const;
-    inline bool operator >=(const String &other) const { return other < *this; }
+    inline bool operator >=(const String &other) const { return !(*this < other); }
 
     inline QString toString() const {
 #if Q_BYTE_ORDER == Q_LITTLE_ENDIAN
@@ -362,7 +354,7 @@ public:
         QString str(l, Qt::Uninitialized);
         QChar *ch = str.data();
         for (int i = 0; i < l; ++i)
-            ch[i] = d->utf16[i];
+            ch[i] = QChar(d->utf16[i]);
         return str;
 #endif
     }
@@ -382,25 +374,44 @@ public:
 
     inline Latin1String &operator=(const QString &str)
     {
-        d->length = str.length();
-        uchar *l = (uchar *)d->latin1;
-        const ushort *uc = (const ushort *)str.unicode();
-        for (int i = 0; i < str.length(); ++i)
-            *l++ = uc[i];
-        while ((quintptr)l & 0x3)
-            *l++ = 0;
+       int len = d->length = str.length();
+       uchar *l = (uchar *)d->latin1;
+       const ushort *uc = (const ushort *)str.unicode();
+        int i = 0;
+// #ifdef __SSE2__
+//         for ( ; i + 16 < len; i += 16) {
+//             __m128i chunk1 = _mm_loadu_si128((__m128i*)&uc[i]); // load
+//             __m128i chunk2 = _mm_loadu_si128((__m128i*)&uc[i + 8]); // load
+//             // pack the two vector to 16 x 8bits elements
+//             const __m128i result = _mm_packus_epi16(chunk1, chunk2);
+//             _mm_storeu_si128((__m128i*)&l[i], result); // store
+//         }
+// #  ifdef Q_PROCESSOR_X86_64
+//         // we can do one more round, of 8 characters
+//         if (i + 8 < len) {
+//             __m128i chunk = _mm_loadu_si128((__m128i*)&uc[i]); // load
+//             // pack with itself, we'll discard the high part anyway
+//             chunk = _mm_packus_epi16(chunk, chunk);
+//             // unaligned 64-bit store
+//             *(quint64*)&l[i] = _mm_cvtsi128_si64(chunk);
+//             i += 8;
+//         }
+// #  endif
+// #endif
+        for ( ; i < len; ++i)
+            l[i] = uc[i];
+        for ( ; (quintptr)(l+i) & 0x3; ++i)
+            l[i] = 0;
         return *this;
     }
 
     inline bool operator ==(const QString &str) const {
-//      return QLatin1String(d->latin1, d->length) == str;
         return QString::fromLatin1(d->latin1, d->length) == str;
     }
     inline bool operator !=(const QString &str) const {
         return !operator ==(str);
     }
     inline bool operator >=(const QString &str) const {
-//        return QLatin1String(d->latin1, d->length) >= str;
         return QString::fromLatin1(d->latin1, d->length) >= str;
     }
 
@@ -414,12 +425,29 @@ public:
             val = d->length - str.d->length;
         return val >= 0;
     }
+    inline bool operator<(const String &str) const
+    {
+        const qle_ushort *uc = (qle_ushort *) str.d->utf16;
+        if (!uc || *uc == 0)
+            return false;
 
+        const uchar *c = (uchar *)d->latin1;
+        const uchar *e = c + qMin((int)d->length, (int)str.d->length);
+
+        while (c < e) {
+            if (*c != *uc)
+                break;
+            ++c;
+            ++uc;
+        }
+        return (c == e ? (int)d->length < (int)str.d->length : *c < *uc);
+
+    }
     inline bool operator ==(const String &str) const {
         return (str == *this);
     }
     inline bool operator >=(const String &str) const {
-        return (str < *this);
+        return !(*this < str);
     }
 
     inline QString toString() const {
@@ -456,7 +484,7 @@ inline bool String::operator <(const String &other) const
         a++,b++;
     if (l==-1)
         return (alen < blen);
-    return (ushort)*a - (ushort)*b;
+    return (ushort)*a < (ushort)*b;
 }
 
 inline bool String::operator<(const Latin1String &str) const
@@ -547,6 +575,9 @@ public:
 class Value
 {
 public:
+    enum {
+        MaxSize = (1<<27) - 1
+    };
     union {
         uint _dummy;
         qle_bitfield<0, 3> type;
@@ -568,7 +599,7 @@ public:
 
     bool isValid(const Base *b) const;
 
-    static int requiredStorage(const QJsonValue &v, bool *compressed);
+    static int requiredStorage(QJsonValue &v, bool *compressed);
     static uint valueToStore(const QJsonValue &v, uint offset);
     static void copyData(const QJsonValue &v, char *dest, bool compressed);
 };
@@ -594,9 +625,9 @@ public:
     int size() const {
         int s = sizeof(Entry);
         if (value.latinKey)
-            s += sizeof(ushort) + *(ushort *) ((const char *)this + sizeof(Entry));
+            s += sizeof(ushort) + qFromLittleEndian(*(ushort *) ((const char *)this + sizeof(Entry)));
         else
-            s += sizeof(uint) + *(int *) ((const char *)this + sizeof(Entry));
+            s += sizeof(uint) + sizeof(ushort)*qFromLittleEndian(*(int *) ((const char *)this + sizeof(Entry)));
         return alignedSize(s);
     }
 
@@ -624,14 +655,23 @@ public:
 
     bool operator ==(const QString &key) const;
     inline bool operator !=(const QString &key) const { return !operator ==(key); }
-    bool operator >=(const QString &key) const;
+    inline bool operator >=(const QString &key) const;
 
     bool operator ==(const Entry &other) const;
     bool operator >=(const Entry &other) const;
 };
 
+inline bool Entry::operator >=(const QString &key) const
+{
+    if (value.latinKey)
+        return (shallowLatin1Key() >= key);
+    else
+        return (shallowKey() >= key);
+}
+
 inline bool operator <(const QString &key, const Entry &e)
 { return e >= key; }
+
 
 class Header {
 public:
@@ -739,7 +779,15 @@ public:
 
     Data *clone(Base *b, int reserve = 0)
     {
-        int size = sizeof(Header) + b->size + reserve;
+        int size = sizeof(Header) + b->size;
+        if (b == header->root() && alloc >= size + reserve)
+            return this;
+
+        if (reserve) {
+            if (reserve < 128)
+                reserve = 128;
+            size = qMax(size + reserve, size *2);
+        }
         char *raw = (char *)malloc(size);
         Q_CHECK_PTR(raw);
         memcpy(raw + sizeof(Header), b, b->size);

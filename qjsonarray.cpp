@@ -1,39 +1,31 @@
 /****************************************************************************
 **
-** Copyright (C) 2012 Nokia Corporation and/or its subsidiary(-ies).
-** Contact: http://www.qt-project.org/
+** Copyright (C) 2015 The Qt Company Ltd.
+** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtCore module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL$
+** $QT_BEGIN_LICENSE:LGPL21$
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and The Qt Company. For licensing terms
+** and conditions see http://www.qt.io/terms-conditions. For further
+** information use the contact form at http://www.qt.io/contact-us.
+**
 ** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 or version 3 as published by the Free
+** Software Foundation and appearing in the file LICENSE.LGPLv21 and
+** LICENSE.LGPLv3 included in the packaging of this file. Please review the
+** following information to ensure the GNU Lesser General Public License
+** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
 ** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** As a special exception, The Qt Company gives you certain additional
+** rights. These rights are described in The Qt Company LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
-**
-** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
-**
-**
 **
 ** $QT_END_LICENSE$
 **
@@ -43,6 +35,7 @@
 #include "qjsonvalue.h"
 #include "qjsonarray.h"
 #include <qstringlist.h>
+#include <qvariant.h>
 #include <qdebug.h>
 
 #include "qjsonwriter_p.h"
@@ -52,7 +45,9 @@ QT_BEGIN_NAMESPACE
 
 /*!
     \class QJsonArray
+    \inmodule QtCore
     \ingroup json
+    \ingroup shared
     \reentrant
     \since 5.0
 
@@ -62,13 +57,69 @@ QT_BEGIN_NAMESPACE
     removing QJsonValue's from the array.
 
     A QJsonArray can be converted to and from a QVariantList. You can query the
-    number of entries with size(), insert(), and remove() entries from it
+    number of entries with size(), insert(), and removeAt() entries from it
     and iterate over its content using the standard C++ iterator pattern.
 
     QJsonArray is an implicitly shared class and shares the data with the document
     it has been created from as long as it is not being modified.
 
     You can convert the array to and from text based JSON through QJsonDocument.
+
+    \sa {JSON Support in Qt}, {JSON Save Game Example}
+*/
+
+/*!
+    \typedef QJsonArray::Iterator
+
+    Qt-style synonym for QJsonArray::iterator.
+*/
+
+/*!
+    \typedef QJsonArray::ConstIterator
+
+    Qt-style synonym for QJsonArray::const_iterator.
+*/
+
+/*!
+    \typedef QJsonArray::size_type
+
+    Typedef for int. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::value_type
+
+    Typedef for QJsonValue. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::difference_type
+
+    Typedef for int. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::pointer
+
+    Typedef for QJsonValue *. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::const_pointer
+
+    Typedef for const QJsonValue *. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::reference
+
+    Typedef for QJsonValue &. Provided for STL compatibility.
+*/
+
+/*!
+    \typedef QJsonArray::const_reference
+
+    Typedef for const QJsonValue &. Provided for STL compatibility.
 */
 
 /*!
@@ -80,12 +131,39 @@ QJsonArray::QJsonArray()
 }
 
 /*!
+    \fn QJsonArray::QJsonArray(std::initializer_list<QJsonValue> args)
+    \since 5.4
+    Creates an array initialized from \a args initialization list.
+
+    QJsonArray can be constructed in a way similar to JSON notation,
+    for example:
+    \code
+    QJsonArray array = { 1, 2.2, QString() };
+    \endcode
+ */
+
+/*!
     \internal
  */
 QJsonArray::QJsonArray(QJsonPrivate::Data *data, QJsonPrivate::Array *array)
     : d(data), a(array)
 {
+    Q_ASSERT(data);
+    Q_ASSERT(array);
     d->ref.ref();
+}
+
+/*!
+    This method replaces part of QJsonArray(std::initializer_list<QJsonValue> args) .
+    The constructor needs to be inline, but we do not want to leak implementation details
+    of this class.
+    \note this method is called for an uninitialized object
+    \internal
+ */
+void QJsonArray::initialize()
+{
+    d = 0;
+    a = 0;
 }
 
 /*!
@@ -128,12 +206,37 @@ QJsonArray &QJsonArray::operator =(const QJsonArray &other)
     return *this;
 }
 
+/*! \fn QJsonArray &QJsonArray::operator+=(const QJsonValue &value)
+
+    Appends \a value to the array, and returns a reference to the array itself.
+
+    \since 5.3
+    \sa append(), operator<<()
+*/
+
+/*! \fn QJsonArray QJsonArray::operator+(const QJsonValue &value) const
+
+    Returns an array that contains all the items in this array followed
+    by the provided \a value.
+
+    \since 5.3
+    \sa operator+=()
+*/
+
+/*! \fn QJsonArray &QJsonArray::operator<<(const QJsonValue &value)
+
+    Appends \a value to the array, and returns a reference to the array itself.
+
+    \since 5.3
+    \sa operator+=(), append()
+*/
+
 /*!
     Converts the string list \a list to a QJsonArray.
 
     The values in \a list will be converted to JSON values.
 
-    \sa toVariantList, QJsonValue::fromString
+    \sa toVariantList(), QJsonValue::fromVariant()
  */
 QJsonArray QJsonArray::fromStringList(const QStringList &list)
 {
@@ -148,7 +251,7 @@ QJsonArray QJsonArray::fromStringList(const QStringList &list)
 
     The QVariant values in \a list will be converted to JSON values.
 
-    \sa toVariantList, QJsonValue::fromVariant
+    \sa toVariantList(), QJsonValue::fromVariant()
  */
 QJsonArray QJsonArray::fromVariantList(const QVariantList &list)
 {
@@ -187,9 +290,17 @@ int QJsonArray::size() const
 }
 
 /*!
+    \fn QJsonArray::count() const
+
+    Same as size().
+
+    \sa size()
+*/
+
+/*!
     Returns \c true if the object is empty. This is the same as size() == 0.
 
-    \sa size
+    \sa size()
  */
 bool QJsonArray::isEmpty() const
 {
@@ -218,7 +329,7 @@ QJsonValue QJsonArray::at(int i) const
 
     Same as \c at(0).
 
-    \sa at
+    \sa at()
  */
 QJsonValue QJsonArray::first() const
 {
@@ -230,7 +341,7 @@ QJsonValue QJsonArray::first() const
 
     Same as \c{at(size() - 1)}.
 
-    \sa at
+    \sa at()
  */
 QJsonValue QJsonArray::last() const
 {
@@ -240,7 +351,7 @@ QJsonValue QJsonArray::last() const
 /*!
     Inserts \a value at the beginning of the array.
 
-    This is the same as \c{insert(0, \a value)}.
+    This is the same as \c{insert(0, value)} and will prepend \a value to the array.
 
     \sa append(), insert()
  */
@@ -261,7 +372,7 @@ void QJsonArray::append(const QJsonValue &value)
 
 /*!
     Removes the value at index position \a i. \a i must be a valid
-    index position in the array (i.e., \c{0 <= \a i < size()}).
+    index position in the array (i.e., \c{0 <= i < size()}).
 
     \sa insert(), replace()
  */
@@ -273,7 +384,7 @@ void QJsonArray::removeAt(int i)
     detach();
     a->removeItems(i, 1);
     ++d->compactionCounter;
-    if (d->compactionCounter > 32 && d->compactionCounter >= (int)a->length/2)
+    if (d->compactionCounter > 32u && d->compactionCounter >= unsigned(a->length) / 2u)
         compact();
 }
 
@@ -284,7 +395,7 @@ void QJsonArray::removeAt(int i)
     the array can be empty, call isEmpty() before calling this
     function.
 
-    \sa removeAt(), takeFirst()
+    \sa removeAt(), removeLast()
 */
 
 /*! \fn void QJsonArray::removeLast()
@@ -294,12 +405,12 @@ void QJsonArray::removeAt(int i)
     empty. If the array can be empty, call isEmpty() before calling
     this function.
 
-    \sa removeAt(), takeLast()
+    \sa removeAt(), removeFirst()
 */
 
 /*!
     Removes the item at index position \a i and returns it. \a i must
-    be a valid index position in the array (i.e., \c{0 <= \a i < size()}).
+    be a valid index position in the array (i.e., \c{0 <= i < size()}).
 
     If you don't use the return value, removeAt() is more efficient.
 
@@ -310,13 +421,8 @@ QJsonValue QJsonArray::takeAt(int i)
     if (!a || i < 0 || i >= (int)a->length)
         return QJsonValue(QJsonValue::Undefined);
 
-    detach();
-
     QJsonValue v(d, a, a->at(i));
-    v.detach();
-
-    removeAt(i);
-
+    removeAt(i); // detaches
     return v;
 }
 
@@ -330,9 +436,10 @@ QJsonValue QJsonArray::takeAt(int i)
 void QJsonArray::insert(int i, const QJsonValue &value)
 {
     Q_ASSERT (i >= 0 && i <= (a ? (int)a->length : 0));
+    QJsonValue val = value;
 
     bool compressed;
-    int valueSize = QJsonPrivate::Value::requiredStorage(value, &compressed);
+    int valueSize = QJsonPrivate::Value::requiredStorage(val, &compressed);
 
     detach(valueSize + sizeof(QJsonPrivate::Value));
 
@@ -340,27 +447,49 @@ void QJsonArray::insert(int i, const QJsonValue &value)
         a->tableOffset = sizeof(QJsonPrivate::Array);
 
     int valueOffset = a->reserveSpace(valueSize, i, 1, false);
+    if (!valueOffset)
+        return;
+
     QJsonPrivate::Value &v = (*a)[i];
-    v.type = (value.t == QJsonValue::Undefined ? QJsonValue::Null : value.t);
+    v.type = (val.t == QJsonValue::Undefined ? QJsonValue::Null : val.t);
     v.latinOrIntValue = compressed;
     v.latinKey = false;
-    v.value = QJsonPrivate::Value::valueToStore(value, valueOffset);
+    v.value = QJsonPrivate::Value::valueToStore(val, valueOffset);
     if (valueSize)
-        QJsonPrivate::Value::copyData(value, (char *)a + valueOffset, compressed);
+        QJsonPrivate::Value::copyData(val, (char *)a + valueOffset, compressed);
 }
 
 /*!
+    \fn QJsonArray::iterator QJsonArray::insert(iterator before, const QJsonValue &value)
+
+    Inserts \a value before the position pointed to by \a before, and returns an iterator
+    pointing to the newly inserted item.
+
+    \sa erase(), insert()
+*/
+
+/*!
+    \fn QJsonArray::iterator QJsonArray::erase(iterator it)
+
+    Removes the item pointed to by \a it, and returns an iterator pointing to the
+    next item.
+
+    \sa removeAt()
+*/
+
+/*!
     Replaces the item at index position \a i with \a value. \a i must
-    be a valid index position in the array (i.e., \c{0 <= \a i < size()}).
+    be a valid index position in the array (i.e., \c{0 <= i < size()}).
 
     \sa operator[](), removeAt()
  */
 void QJsonArray::replace(int i, const QJsonValue &value)
 {
     Q_ASSERT (a && i >= 0 && i < (int)(a->length));
+    QJsonValue val = value;
 
     bool compressed;
-    int valueSize = QJsonPrivate::Value::requiredStorage(value, &compressed);
+    int valueSize = QJsonPrivate::Value::requiredStorage(val, &compressed);
 
     detach(valueSize);
 
@@ -368,16 +497,19 @@ void QJsonArray::replace(int i, const QJsonValue &value)
         a->tableOffset = sizeof(QJsonPrivate::Array);
 
     int valueOffset = a->reserveSpace(valueSize, i, 1, true);
+    if (!valueOffset)
+        return;
+
     QJsonPrivate::Value &v = (*a)[i];
-    v.type = (value.t == QJsonValue::Undefined ? QJsonValue::Null : value.t);
+    v.type = (val.t == QJsonValue::Undefined ? QJsonValue::Null : val.t);
     v.latinOrIntValue = compressed;
     v.latinKey = false;
-    v.value = QJsonPrivate::Value::valueToStore(value, valueOffset);
+    v.value = QJsonPrivate::Value::valueToStore(val, valueOffset);
     if (valueSize)
-        QJsonPrivate::Value::copyData(value, (char *)a + valueOffset, compressed);
+        QJsonPrivate::Value::copyData(val, (char *)a + valueOffset, compressed);
 
     ++d->compactionCounter;
-    if (d->compactionCounter > 32 && d->compactionCounter >= (int)a->length/2)
+    if (d->compactionCounter > 32u && d->compactionCounter >= unsigned(a->length) / 2u)
         compact();
 }
 
@@ -397,16 +529,16 @@ bool QJsonArray::contains(const QJsonValue &value) const
 
 /*!
     Returns the value at index position \a i as a modifiable reference.
-    \a i must be a valid index position in the array (i.e., \c{0 <= \a i <
+    \a i must be a valid index position in the array (i.e., \c{0 <= i <
     size()}).
 
-    The return value is of type QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type QJsonValueRef, you can
+    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.
 
-    \sa at(), value()
+    \sa at()
  */
 QJsonValueRef QJsonArray::operator [](int i)
 {
@@ -456,7 +588,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 
 /*! \fn QJsonArray::iterator QJsonArray::begin()
 
-    Returns an \l{STL-style iterator} pointing to the first item in
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the first item in
     the array.
 
     \sa constBegin(), end()
@@ -469,7 +601,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 
 /*! \fn QJsonArray::const_iterator QJsonArray::constBegin() const
 
-    Returns a const \l{STL-style iterator} pointing to the first item
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the first item
     in the array.
 
     \sa begin(), constEnd()
@@ -477,7 +609,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 
 /*! \fn QJsonArray::iterator QJsonArray::end()
 
-    Returns an \l{STL-style iterator} pointing to the imaginary item
+    Returns an \l{STL-style iterators}{STL-style iterator} pointing to the imaginary item
     after the last item in the array.
 
     \sa begin(), constEnd()
@@ -490,22 +622,22 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 
 /*! \fn QJsonArray::const_iterator QJsonArray::constEnd() const
 
-    Returns a const \l{STL-style iterator} pointing to the imaginary
+    Returns a const \l{STL-style iterators}{STL-style iterator} pointing to the imaginary
     item after the last item in the array.
 
     \sa constBegin(), end()
 */
 
-/*! \fn void QJsonArray::push_back(const T &value)
+/*! \fn void QJsonArray::push_back(const QJsonValue &value)
 
     This function is provided for STL compatibility. It is equivalent
-    to \l{QJsonArray::append()}{append(\a value)}.
+    to \l{QJsonArray::append()}{append(value)} and will append \a value to the array.
 */
 
-/*! \fn void QJsonArray::push_front(const T &value)
+/*! \fn void QJsonArray::push_front(const QJsonValue &value)
 
     This function is provided for STL compatibility. It is equivalent
-    to \l{QJsonArray::prepend()}{prepend(\a value)}.
+    to \l{QJsonArray::prepend()}{prepend(value)} and will prepend \a value to the array.
 */
 
 /*! \fn void QJsonArray::pop_front()
@@ -529,6 +661,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 */
 
 /*! \class QJsonArray::iterator
+    \inmodule QtCore
     \brief The QJsonArray::iterator class provides an STL-style non-const iterator for QJsonArray.
 
     QJsonArray::iterator allows you to iterate over a QJsonArray
@@ -558,7 +691,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 
 /*! \typedef QJsonArray::iterator::iterator_category
 
-  A synonym for \i {std::random_access_iterator_tag} indicating
+  A synonym for \e {std::random_access_iterator_tag} indicating
   this iterator is a random access iterator.
 */
 
@@ -577,6 +710,11 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     \internal
 */
 
+/*! \typedef QJsonArray::iterator::pointer
+
+    \internal
+*/
+
 /*! \fn QJsonArray::iterator::iterator()
 
     Constructs an uninitialized iterator.
@@ -585,37 +723,43 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     on an uninitialized iterator. Use operator=() to assign a value
     to it before using it.
 
-    \sa QJsonArray::begin() QJsonArray::end()
+    \sa QJsonArray::begin(), QJsonArray::end()
 */
 
-/*! \fn QJsonArray::iterator::iterator(const iterator &other)
-
-    Constructs a copy of \a other.
+/*! \fn QJsonArray::iterator::iterator(QJsonArray *array, int index)
+    \internal
 */
 
 /*! \fn QJsonValueRef QJsonArray::iterator::operator*() const
+
 
     Returns a modifiable reference to the current item.
 
     You can change the value of an item by using operator*() on the
     left side of an assignment.
 
-    The return value is of type QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type QJsonValueRef, you can
+    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.
 */
 
+/*! \fn QJsonValueRef *QJsonArray::iterator::operator->() const
+
+    Returns a pointer to a modifiable reference to the current item.
+*/
+
 /*! \fn QJsonValueRef QJsonArray::iterator::operator[](int j) const
 
-    Returns a modifiable reference to the item at position \c{*this + j}.
+    Returns a modifiable reference to the item at offset \a j from the
+    item pointed to by this iterator (the item at position \c{*this + j}).
 
     This function is provided to make QJsonArray iterators behave like C++
     pointers.
 
-    The return value is of type QJsonValueRef, a helper class for QJsonArray
-    and QJsonObject. When you get an object of type QJsonValueRef, you can
+    The return value is of type \keyword QJsonValueRef, a helper class for QJsonArray
+    and QJsonObject. When you get an object of type \keyword QJsonValueRef, you can
     use it as if it were a reference to a QJsonValue. If you assign to it,
     the assignment will apply to the character in the QJsonArray of QJsonObject
     from which you got the reference.
@@ -752,6 +896,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 */
 
 /*! \class QJsonArray::const_iterator
+    \inmodule QtCore
     \brief The QJsonArray::const_iterator class provides an STL-style const iterator for QJsonArray.
 
     QJsonArray::const_iterator allows you to iterate over a
@@ -776,7 +921,7 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     aware that any non-const function call performed on the QJsonArray
     will render all existing iterators undefined.
 
-    \sa QJsonArray::iterator, QJsonArrayIterator
+    \sa QJsonArray::iterator
 */
 
 /*! \fn QJsonArray::const_iterator::const_iterator()
@@ -787,12 +932,16 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     on an uninitialized iterator. Use operator=() to assign a value
     to it before using it.
 
-    \sa QJsonArray::constBegin() QJsonArray::constEnd()
+    \sa QJsonArray::constBegin(), QJsonArray::constEnd()
+*/
+
+/*! \fn QJsonArray::const_iterator::const_iterator(const QJsonArray *array, int index)
+    \internal
 */
 
 /*! \typedef QJsonArray::const_iterator::iterator_category
 
-  A synonym for \i {std::random_access_iterator_tag} indicating
+  A synonym for \e {std::random_access_iterator_tag} indicating
   this iterator is a random access iterator.
 */
 
@@ -807,6 +956,11 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
 */
 
 /*! \typedef QJsonArray::const_iterator::reference
+
+    \internal
+*/
+
+/*! \typedef QJsonArray::const_iterator::pointer
 
     \internal
 */
@@ -826,9 +980,15 @@ bool QJsonArray::operator!=(const QJsonArray &other) const
     Returns the current item.
 */
 
+/*! \fn QJsonValue *QJsonArray::const_iterator::operator->() const
+
+    Returns a pointer to the current item.
+*/
+
 /*! \fn QJsonValue QJsonArray::const_iterator::operator[](int j) const
 
-    Returns the item at position \c{*this + j}.
+    Returns the item at offset \a j from the item pointed to by this iterator (the item at
+    position \c{*this + j}).
 
     This function is provided to make QJsonArray iterators behave like C++
     pointers.
@@ -968,10 +1128,6 @@ void QJsonArray::detach(uint reserve)
         d->ref.ref();
         return;
     }
-    /*
-    if (reserve == 0 && d->ref.load() == 1)
-        return;
-    */
     if (reserve == 0 && int(d->ref) == 1)
         return;
 
@@ -997,7 +1153,7 @@ void QJsonArray::compact()
 }
 
 
-#ifndef QT_NO_DEBUG_STREAM
+#if !defined(QT_NO_DEBUG_STREAM) && !defined(QT_JSON_READONLY)
 QDebug operator<<(QDebug dbg, const QJsonArray &a)
 {
     if (!a.a) {
@@ -1009,7 +1165,7 @@ QDebug operator<<(QDebug dbg, const QJsonArray &a)
     dbg.nospace() << "QJsonArray("
                   << json.constData() // print as utf-8 string without extra quotation marks
                   << ")";
-    return dbg.space();
+    return dbg;
 }
 #endif
 
