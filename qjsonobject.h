@@ -34,6 +34,10 @@
 #ifndef QJSONOBJECT_H
 #define QJSONOBJECT_H
 
+#ifndef Q_DECL_CONSTEXPR
+# define Q_DECL_CONSTEXPR constexpr
+#endif
+
 #include "qjsonvalue.h"
 #include <QtCore/qiterator.h>
 #ifdef Q_COMPILER_INITIALIZER_LISTS

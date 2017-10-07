@@ -45,6 +45,10 @@
 // We mean it.
 //
 
+#ifndef Q_DECL_CONSTEXPR
+# define Q_DECL_CONSTEXPR constexpr
+#endif
+
 #include "qjsonobject.h"
 #include "qjsonvalue.h"
 #include "qjsondocument.h"
